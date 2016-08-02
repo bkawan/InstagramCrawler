@@ -7,7 +7,10 @@ from selenium.webdriver.common.keys import Keys
 import time
 from InstaCrawler.items import InstacrawlerItem
 
+
+
 from seleniumscraper import InstagramCrawler
+
 from selenium import webdriver
 import time
 import json
@@ -57,13 +60,24 @@ class InstaSpider(scrapy.Spider):
             self.end_date = self.get_date_input()
 
         """ Converting date format to epoch"""
+        # time = ""
+        # "int(time.mktime(time.strptime('2000-01-01 12:34:00', '%Y-%m-%d %H:%M:%S'))) - time.timezone"
         self.start_epoch = (time.mktime(time.strptime(self.start_date, '%d/%m/%Y'))) - time.timezone
-        self.end_epoch = (time.mktime(time.strptime(self.start_date, '%d/%m/%Y'))) - time.timezone
+        self.end_epoch = (time.mktime(time.strptime(self.end_date, '%d/%m/%Y'))) - time.timezone
 
+        # self.start_epoch = int(self.start_epoch)
+        # self.end_epoch = int(self.end_epoch)
+
+        print("*********")
+        print(self.start_epoch, self.end_epoch)
+        print("*********")
+
+
+        time.sleep(10)
 
         """ For Testing uncomment this and assign epoch time  """
-        # self.start_epoch = 1470125759
-        # self.end_epoch = 1470125797
+        # self.start_epoch = 1469892220
+        # self.end_epoch = 1470131761
 
         """ GET MINIMUM FOLLOWERS """
         self.min_followers = self.get_min_followers_input()
@@ -84,40 +98,52 @@ class InstaSpider(scrapy.Spider):
     def parse(self, response):
         self.driver.get(response.url)
         div_selectors = self.driver.find_elements_by_xpath("//div[@class='_nljxa']")[1]
+
         load_more_btn = self.driver.find_element_by_class_name('_oidfu')
-        load_more_btn.click()
+        if load_more_btn:
+            load_more_btn.click()
         slicing = 0
         x = 0
 
+
         while self.infinite_loop:
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
             anchor_element = div_selectors.find_elements_by_xpath('.//a[@class="_8mlbc _vbtk2 _t5r8b"]')
             temp_i = len(anchor_element)
             anchor_element = anchor_element[slicing:]
             for anchor in anchor_element:
-                yield scrapy.Request(anchor.get_attribute('href'), callback=self.parse_post, dont_filter=True)
+                print("*************")
+                print(anchor.get_attribute('href'))
+                print("*************")
+
+                yield scrapy.Request(anchor.get_attribute('href'), callback=self.parse_check_end_Date, dont_filter=True)
             slicing = temp_i
             x += 1
-            time.sleep(10)
+            time.sleep(1)
 
 
-    def parse_post(self, response):
+    def parse_check_end_Date(self, response):
         json_shared_data = re.search('(window._sharedData\s=\s)(.*)(;<\/script>)', response.body)
         post_data_text = json_shared_data.group(2)
         post_data_dict = json.loads(post_data_text, strict=False)
         post_data = post_data_dict['entry_data']['PostPage'][0]['media']
 
         post_date_in_epoch = float(post_data['date'])
+        print("*************")
+        print(post_date_in_epoch)
+        print("*************")
+
 
         if self.end_epoch >= post_date_in_epoch:
 
-            request = scrapy.Request(response.url, callback=self.parse_check_end_date, dont_filter=True)
+            request = scrapy.Request(response.url, callback=self.parse_check_start_date, dont_filter=True)
             yield request
         else:
             pass
             # self.driver.close()
 
-    def parse_check_end_date(self,response):
+    def parse_check_start_date(self,response):
 
         json_shared_data = re.search('(window._sharedData\s=\s)(.*)(;<\/script>)', response.body)
         post_data_text = json_shared_data.group(2)

@@ -12,7 +12,7 @@ json_path = "data/extracted_data/"
 class InstacrawlerPipeline(object):
 
     def __init__(self):
-        self.file = codecs.open('{}instagram_crawled_data.json'.format(json_path),'wb',encoding='utf-8')
+        self.file = codecs.open('{}instagram_crawled_data1.json'.format(json_path),'wb',encoding='utf-8')
 
     def process_item(self, item, spider):
         line = json.dumps(dict(item)) + "\n"

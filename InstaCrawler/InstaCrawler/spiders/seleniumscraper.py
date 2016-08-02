@@ -73,7 +73,6 @@ class InstagramCrawler:
         elems = self.driver.find_elements_by_xpath(xpath)
         return [e.text for e in elems]
 
-
     def scrape(self):
         self.driver.get("https://www.instagram.com/{0}/".format(self.data['USERNAME']))
 
