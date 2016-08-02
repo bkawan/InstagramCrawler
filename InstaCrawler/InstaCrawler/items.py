@@ -11,9 +11,5 @@ import scrapy
 class InstacrawlerItem(scrapy.Item):
     # define the fields for your item here like:
     # name = scrapy.Field()
-    Post = scrapy.Field()
+    Tag = scrapy.Field()
 
-class InstacrawlerItemCategory(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    Category = scrapy.Field()

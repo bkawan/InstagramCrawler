@@ -1,23 +1,14 @@
 # -*- coding: utf-8 -*-
 import scrapy
 from scrapy.shell import inspect_response
-from InstaCrawler import  settings
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-import time
 from InstaCrawler.items import InstacrawlerItem
-
-
-
 from seleniumscraper import InstagramCrawler
-
 from selenium import webdriver
 import time
 import json
 import re
-import  selenium
+import selenium
 from selenium.common.exceptions import NoSuchElementException, WebDriverException
-
 
 
 def load(filename):
@@ -59,25 +50,16 @@ class InstaSpider(scrapy.Spider):
             print("Please Enter End Date below: ")
             self.end_date = self.get_date_input()
 
+
         """ Converting date format to epoch"""
-        # time = ""
         # "int(time.mktime(time.strptime('2000-01-01 12:34:00', '%Y-%m-%d %H:%M:%S'))) - time.timezone"
         self.start_epoch = (time.mktime(time.strptime(self.start_date, '%d/%m/%Y'))) - time.timezone
         self.end_epoch = (time.mktime(time.strptime(self.end_date, '%d/%m/%Y'))) - time.timezone
 
-        # self.start_epoch = int(self.start_epoch)
-        # self.end_epoch = int(self.end_epoch)
-
-        print("*********")
-        print(self.start_epoch, self.end_epoch)
-        print("*********")
-
-
-        time.sleep(10)
-
         """ For Testing uncomment this and assign epoch time  """
-        # self.start_epoch = 1469892220
-        # self.end_epoch = 1470131761
+        # self.start_epoch = 1470162607
+        # self.end_epoch =   1470162659
+
 
         """ GET MINIMUM FOLLOWERS """
         self.min_followers = self.get_min_followers_input()
@@ -105,11 +87,13 @@ class InstaSpider(scrapy.Spider):
         slicing = 0
         x = 0
 
-
         while self.infinite_loop:
+
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
             anchor_element = div_selectors.find_elements_by_xpath('.//a[@class="_8mlbc _vbtk2 _t5r8b"]')
+            if slicing == len(anchor_element):
+                self.infinite_loop = False
             temp_i = len(anchor_element)
             anchor_element = anchor_element[slicing:]
             for anchor in anchor_element:
@@ -120,8 +104,7 @@ class InstaSpider(scrapy.Spider):
                 yield scrapy.Request(anchor.get_attribute('href'), callback=self.parse_check_end_Date, dont_filter=True)
             slicing = temp_i
             x += 1
-            time.sleep(1)
-
+            time.sleep(5)
 
     def parse_check_end_Date(self, response):
         json_shared_data = re.search('(window._sharedData\s=\s)(.*)(;<\/script>)', response.body)
@@ -130,20 +113,15 @@ class InstaSpider(scrapy.Spider):
         post_data = post_data_dict['entry_data']['PostPage'][0]['media']
 
         post_date_in_epoch = float(post_data['date'])
-        print("*************")
-        print(post_date_in_epoch)
-        print("*************")
-
 
         if self.end_epoch >= post_date_in_epoch:
-
             request = scrapy.Request(response.url, callback=self.parse_check_start_date, dont_filter=True)
             yield request
         else:
             pass
             # self.driver.close()
 
-    def parse_check_start_date(self,response):
+    def parse_check_start_date(self, response):
 
         json_shared_data = re.search('(window._sharedData\s=\s)(.*)(;<\/script>)', response.body)
         post_data_text = json_shared_data.group(2)
@@ -230,10 +208,9 @@ class InstaSpider(scrapy.Spider):
         user_data_dict = json.loads(user_data_text, strict=False)
 
         user_data = user_data_dict['entry_data']['ProfilePage'][0]['user']
-        link_in_bio =user_data['external_url']
+        link_in_bio = user_data['external_url']
 
         followers_count = user_data['followed_by']['count']
-
 
         """" ************** Caption **************** """
 
@@ -249,34 +226,35 @@ class InstaSpider(scrapy.Spider):
         except (ValueError or IndexError):
             pass
 
-
-        """ EXtraction of other account tags"""
+        """ EXtraction of oter account tags"""
         other_account_tags = re.findall(r'(@[a-zA-Z0-9:%._\+~#=]+)', captions)
 
-        """ Post Item  """
-
+        """ save Tag item """
         if int(followers_count) >= int(self.min_followers):
             item = InstacrawlerItem()
 
-            item['Post'] = {
-                "Unique Identifier": response.meta['username'],
-                "Link To The Post": response.meta['link_to_the_post'],
-                "Influence Handle": "@{}".format(response.meta['username']),
-                "Post Likes":{
-                    "count": response.meta['likes_count']
+            item['Tag'] = {
+                "tag_name": self.tag,
+                "Post": {
+                    "Unique Identifier": response.meta['username'],
+                    "Link To The Post": response.meta['link_to_the_post'],
+                    "Influence Handle": "@{}".format(response.meta['username']),
+                    "Post Likes": {
+                        "count": response.meta['likes_count']
                     },
-                "Post Comments": {
-                    "count": response.meta['comments_count'],
-                    "comments":response.meta['comments']
+                    "Post Comments": {
+                        "count": response.meta['comments_count'],
+                        "comments": response.meta['comments']
                     },
-                "Engagement": int(response.meta['comments_count'])+int(response.meta['likes_count']),
-                "Other Hash Tags":other_hash_tags,
-                "Other Account Tags": other_account_tags,
-                "Link in Bio": link_in_bio,
+                    "Engagement": int(response.meta['comments_count']) + int(response.meta['likes_count']),
+                    "Other Hash Tags": other_hash_tags,
+                    "Other Account Tags": other_account_tags,
+                    "Link in Bio": link_in_bio,
 
-                "Date of Post":  response.meta['post_date'],
-                "Followers":{
-                    "count": followers_count
+                    "Date of Post": response.meta['post_date'],
+                    "Followers": {
+                        "count": followers_count
+                    }
                 }
             }
             yield item
@@ -293,43 +271,24 @@ class InstaSpider(scrapy.Spider):
 
     def get_date_input(self):
 
-            date = raw_input("Enter Date (dd/mm/yyyy): ")
-            group = re.search(r'(\d{2})[/.-](\d{2})[/.-]20(\d{2})$',date)
+        date = raw_input("Enter Date (dd/mm/yyyy): ")
+        group = re.search(r'(\d{2})[/.-](\d{2})[/.-]20(\d{2})$', date)
 
-            if group:
-                return group.group()
-            else:
+        if group:
+            return group.group()
+        else:
 
-                print("ERROR!!!! Date Format Error!! please Check the format'")
-                return False
+            print("ERROR!!!! Date Format Error!! please Check the format'")
+            return False
 
     def get_min_followers_input(self):
 
-            followers = raw_input("Enter Minimum Followers(+ve numbers only): ")
-            group = re.search(r'^[0-9]+$', followers)
+        followers = raw_input("Enter Minimum Followers(+ve numbers only): ")
+        group = re.search(r'^[0-9]+$', followers)
 
-            if group:
-                return group.group()
-            else:
+        if group:
+            return group.group()
+        else:
 
-                print("ERROR!!!! Only +ve Integer!! please Check the format'")
-                return False
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            print("ERROR!!!! Only +ve Integer!! please Check the format'")
+            return False
