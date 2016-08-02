@@ -92,3 +92,4 @@ ENV/
 .idea
 
 data/login_data/login_details.json
+InstaCrawler/data/login_data/login_details.json
