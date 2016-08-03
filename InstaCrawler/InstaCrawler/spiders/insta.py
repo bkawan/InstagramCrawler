@@ -28,43 +28,22 @@ class InstaSpider(scrapy.Spider):
         super(InstaSpider, self).__init__()
 
         self.infinite_loop = True
-        self.tag = self.get_hastag_input()
-
-        while not self.tag:
-            self.tag = self.get_hastag_input()
-
+        self.tag = self.input_hash_tag_checker()
         self.start_urls = ['https://www.instagram.com/explore/tags/%s' % self.tag.strip()]
+        date_checker = self.input_date_checker()
+        self.start_epoch = date_checker[0]
+        self.end_epoch = date_checker[1]
+        self.min_followers = self.input_min_followers_checker()
 
-        print("Please Enter Start Date below: ")
-        self.start_date = self.get_date_input()
-
-        while not self.start_date:
-            print("Please Enter Start Date below: ")
-
-            self.start_date = self.get_date_input()
-
-        print("Please Enter End Date below: ")
-        self.end_date = self.get_date_input()
-
-        while not self.end_date:
-            print("Please Enter End Date below: ")
-            self.end_date = self.get_date_input()
-
-
-        """ Converting date format to epoch"""
-        # "int(time.mktime(time.strptime('2000-01-01 12:34:00', '%Y-%m-%d %H:%M:%S'))) - time.timezone"
-        self.start_epoch = (time.mktime(time.strptime(self.start_date, '%d/%m/%Y'))) - time.timezone
-        self.end_epoch = (time.mktime(time.strptime(self.end_date, '%d/%m/%Y'))) - time.timezone
+        # print("****************")
+        # print(self.tag,self.start_epoch,self.end_epoch,self.min_followers)
+        # print("**************")
+        # time.sleep(20)
 
         """ For Testing uncomment this and assign epoch time  """
         # self.start_epoch = 1470162607
         # self.end_epoch =   1470162659
 
-
-        """ GET MINIMUM FOLLOWERS """
-        self.min_followers = self.get_min_followers_input()
-        while not self.min_followers:
-            self.min_followers = self.get_min_followers_input()
 
         """ LOAD login_details.json data for login process"""
         self.data = load("data/login_data/login_details.json")
@@ -79,7 +58,15 @@ class InstaSpider(scrapy.Spider):
 
     def parse(self, response):
         self.driver.get(response.url)
-        div_selectors = self.driver.find_elements_by_xpath("//div[@class='_nljxa']")[1]
+        try:
+            """ Select Most Recent Post Div Elements"""
+            div_selectors = self.driver.find_elements_by_xpath("//div[@class='_nljxa']")[1]
+        except IndexError:
+            print("*****************************************************")
+            self.logger.error("Most Recent Post Div Elements not found")
+            print("*****************************************************")
+
+            pass
 
         load_more_btn = self.driver.find_element_by_class_name('_oidfu')
         if load_more_btn:
@@ -97,10 +84,6 @@ class InstaSpider(scrapy.Spider):
             temp_i = len(anchor_element)
             anchor_element = anchor_element[slicing:]
             for anchor in anchor_element:
-                print("*************")
-                print(anchor.get_attribute('href'))
-                print("*************")
-
                 yield scrapy.Request(anchor.get_attribute('href'), callback=self.parse_check_end_Date, dont_filter=True)
             slicing = temp_i
             x += 1
@@ -111,15 +94,17 @@ class InstaSpider(scrapy.Spider):
         post_data_text = json_shared_data.group(2)
         post_data_dict = json.loads(post_data_text, strict=False)
         post_data = post_data_dict['entry_data']['PostPage'][0]['media']
-
         post_date_in_epoch = float(post_data['date'])
 
         if self.end_epoch >= post_date_in_epoch:
             request = scrapy.Request(response.url, callback=self.parse_check_start_date, dont_filter=True)
             yield request
         else:
+            print("*****************************************************")
+            self.logger.error("Error parsing date")
+            print("*****************************************************")
+
             pass
-            # self.driver.close()
 
     def parse_check_start_date(self, response):
 
@@ -148,7 +133,7 @@ class InstaSpider(scrapy.Spider):
                 if view_all_comments_btn:
                     view_all_comments_btn.click()
             except (selenium.common.exceptions.NoSuchElementException or selenium.common.exceptions.WebDriverException):
-                print("No View all Button")
+                self.logger.error("The is no View all button in comments")
 
             """ Click load more button until it is available"""
             i = 0
@@ -162,10 +147,13 @@ class InstaSpider(scrapy.Spider):
                     time.sleep(1)
                 except (
                             selenium.common.exceptions.NoSuchElementException or selenium.common.exceptions.WebDriverException):
+                    print("*****************************************************")
+                    self.logger.error("End of  Load More button")
+                    print("*****************************************************")
 
-                    print('End of  Load More button')
                     load_more_btn = False
                 i += 1
+
             """ Extract comments after finished loading all comments elements"""
             users_elem = self.post_driver.find_elements_by_xpath("//li[@class='_nk46a']/a")
             comments_elem = self.post_driver.find_elements_by_xpath("//li[@class='_nk46a']/span")
@@ -213,7 +201,6 @@ class InstaSpider(scrapy.Spider):
         followers_count = user_data['followed_by']['count']
 
         """" ************** Caption **************** """
-
         captions = response.meta['captions']
 
         """ Extraction hash tags from captions"""
@@ -224,6 +211,10 @@ class InstaSpider(scrapy.Spider):
         try:
             other_hash_tags.remove(self.tag)
         except (ValueError or IndexError):
+            print("*****************************************************")
+            self.logger.error("Error In Hash Tag")
+            print("*****************************************************")
+
             pass
 
         """ EXtraction of oter account tags"""
@@ -259,36 +250,65 @@ class InstaSpider(scrapy.Spider):
             }
             yield item
 
-    def get_hastag_input(self):
-        hashtag = raw_input("Enter Hash Tag#(shopping): ")
+
+    def input_date_checker(self):
+
+        start_date = raw_input("Enter Start Date (dd/mm/yyyy): ")
+        date_regex = re.compile(r'(\d{2})[/.-](\d{2})[/.-]20(\d{2})$')
+        start_date_group = re.search(date_regex, start_date)
+        while not start_date_group:
+            print("*************************************************")
+            print("ERROR!!,Empty OR  please check Start Date format ")
+            print("*************************************************")
+
+            start_date = raw_input("Enter Start Date Again (dd/mm/yyyy): ")
+            start_date_group = re.search(date_regex, start_date)
+        start_date = start_date_group.group()
+        start_epoch = (time.mktime(time.strptime(start_date, '%d/%m/%Y'))) - time.timezone
+
+        end_date = raw_input("Enter End Date (dd/mm/yyyy): ")
+        end_date_group = re.search(date_regex, end_date)
+        while not end_date_group:
+            print("*************************************************")
+            print("ERROR, Empty OR please check End Date format ")
+            print("*************************************************")
+            end_date = raw_input("Enter End Date Again (dd/mm/yyyy): ")
+            end_date_group = re.search(date_regex, end_date)
+        end_date = end_date_group.group()
+        end_epoch = (time.mktime(time.strptime(end_date, '%d/%m/%Y'))) - time.timezone
+
+        if end_epoch <= start_epoch:
+            print("*************************************************")
+            print("ERROR, Please end date must be  ahead of start date")
+            print ("Enter Start Date Again ")
+            print("*************************************************")
+
+            self.input_date_checker()
+
+        return start_epoch, end_epoch
+
+    def input_hash_tag_checker(self):
+        hashtag = raw_input("Enter Hash Tag# (shopping): ")
         group = re.search(r'^\w+(.*)', hashtag)
-        if group:
-            return group.group()
-        else:
 
-            print("ERROR!!!! HASH tag Format Error!! Starts with either Alpha or Numeric'")
-            return False
+        while not group:
+            print("***********************************************************************")
+            print("ERROR!!!! HASH tag Format Error!! Starts with either Alpha or Numeric without #'")
+            print("***********************************************************************")
+            hashtag = raw_input("Enter Hash Tag Again# (shopping): ")
+            group = re.search(r'^\w+(.*)', hashtag)
 
-    def get_date_input(self):
+        return group.group()
 
-        date = raw_input("Enter Date (dd/mm/yyyy): ")
-        group = re.search(r'(\d{2})[/.-](\d{2})[/.-]20(\d{2})$', date)
+    def input_min_followers_checker(self):
 
-        if group:
-            return group.group()
-        else:
-
-            print("ERROR!!!! Date Format Error!! please Check the format'")
-            return False
-
-    def get_min_followers_input(self):
-
-        followers = raw_input("Enter Minimum Followers(+ve numbers only): ")
+        followers = raw_input("Enter Minimum Followers (+ve numbers only): ")
         group = re.search(r'^[0-9]+$', followers)
-
-        if group:
-            return group.group()
-        else:
-
+        while not group:
+            print("*****************************************************")
             print("ERROR!!!! Only +ve Integer!! please Check the format'")
-            return False
+            print("******************************************************")
+            followers = raw_input("Enter Minimum Followers Again (+ve numbers only): ")
+            group = re.search(r'^[0-9]+$', followers)
+
+        return group.group()
