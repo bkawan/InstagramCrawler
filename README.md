@@ -13,6 +13,4 @@ Inputs: Date range (i.e. start_date & end_date), Hashtag, min_follower
 Exports: Unique identifier for influencer, link to the post, influencer handle, influencer follower #, post likes, comments, engagement #, other hashtags in the post, other account tags, link in bio
 Export file format: json
 
-Steps
-1. Create a scrapy crawler that uses selenium and get the posts that match the input criteria. For this, the script will go to url https://www.instagram.com/explore/tags/shopping/ (the last word in the url is the hashtag), scroll down to Most Recent and get all posts that matches the given date.
-2. Pull all export data points by going to post page and bio page of instagram user who posted the media. Save the data points to json file.
+
