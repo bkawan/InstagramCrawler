@@ -35,6 +35,14 @@ class InstaSpider(scrapy.Spider):
         self.end_epoch = date_checker[1]
         self.min_followers = self.input_min_followers_checker()
 
+        print("************************************************************")
+        print("Start Epich :", self.start_epoch,"End Epoch:", self.end_epoch)
+        print("Start Date(Local Date) :",time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime(self.start_epoch)),
+                                                       "End Date(Local Date:",time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime(self.end_epoch)))
+        print("Tag to Crawl: ",self.tag)
+        print("Minimum Followers: ",self.min_followers)
+        print("**********************************************************")
+
         # print("****************")
         # print(self.tag,self.start_epoch,self.end_epoch,self.min_followers)
         # print("**************")
@@ -46,11 +54,23 @@ class InstaSpider(scrapy.Spider):
 
 
         """ LOAD login_details.json data for login process"""
-        self.data = load("data/login_data/login_details.json")
+        try:
+            self.data = load("data/login_data/login_details.json")
+        except:
+            print("*****************************")
+            print("Crawling without Login ")
+            print("*****************************")
+            pass
         self.driver = webdriver.Chrome()
         self.post_driver = webdriver.Chrome()
-        self.instagram = InstagramCrawler(self.driver, self.data)
-        self.instagram.run()
+        try:
+            self.instagram = InstagramCrawler(self.driver, self.data)
+            self.instagram.run()
+        except:
+            print("*****************************")
+            print("Crawling without Login ")
+            print("*****************************")
+            pass
 
     def spider_closed(self, spider):
         self.driver.close()
@@ -62,13 +82,18 @@ class InstaSpider(scrapy.Spider):
             """ Select Most Recent Post Div Elements"""
             div_selectors = self.driver.find_elements_by_xpath("//div[@class='_nljxa']")[1]
         except IndexError:
-            print("*****************************************************")
+            print("*******************************************************************************")
+            div_selectors = ""
             self.logger.error("Most Recent Post Div Elements not found")
-            print("*****************************************************")
+            print("********************************************************************************")
 
             pass
 
-        load_more_btn = self.driver.find_element_by_class_name('_oidfu')
+        try:
+            load_more_btn = self.driver.find_element_by_class_name('_oidfu')
+        except selenium.common.exceptions.NoSuchElementException:
+            self.logger.error("ERROR!! Either no posts related to hashtag [{}]found  or no Load more button Found ".format(self.tag))
+            load_more_btn = False
         if load_more_btn:
             load_more_btn.click()
         slicing = 0
@@ -78,7 +103,18 @@ class InstaSpider(scrapy.Spider):
 
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-            anchor_element = div_selectors.find_elements_by_xpath('.//a[@class="_8mlbc _vbtk2 _t5r8b"]')
+
+            try:
+                anchor_element = div_selectors.find_elements_by_xpath('.//a[@class="_8mlbc _vbtk2 _t5r8b"]')
+            except:
+                print("***************************************************************")
+                self.logger.error(
+                    "ERROR!! There is not div selector element for the post tag [{}] ".format(
+                        self.tag))
+                print("***************************************************************")
+
+                anchor_element = []
+
             if slicing == len(anchor_element):
                 self.infinite_loop = False
             temp_i = len(anchor_element)
@@ -87,7 +123,7 @@ class InstaSpider(scrapy.Spider):
                 yield scrapy.Request(anchor.get_attribute('href'), callback=self.parse_check_end_Date, dont_filter=True)
             slicing = temp_i
             x += 1
-            time.sleep(5)
+            time.sleep(10)
 
     def parse_check_end_Date(self, response):
         json_shared_data = re.search('(window._sharedData\s=\s)(.*)(;<\/script>)', response.body)
@@ -100,9 +136,11 @@ class InstaSpider(scrapy.Spider):
             request = scrapy.Request(response.url, callback=self.parse_check_start_date, dont_filter=True)
             yield request
         else:
-            print("*****************************************************")
-            self.logger.error("Error parsing date")
-            print("*****************************************************")
+            print("******************************************************************************************")
+            self.logger.error("Error!! There are no post between the date range {} - {} "
+                              .format(time.strftime("%d-%m-%Y %H:%M:%S", time.localtime(self.start_epoch)),
+                                      time.strftime("%d-%m-%Y %H:%M:%S", time.localtime(self.end_epoch))))
+            print("******************************************************************************************")
 
             pass
 
@@ -144,7 +182,7 @@ class InstaSpider(scrapy.Spider):
                     if btn1:
                         btn1.click()
                         print(i)
-                    time.sleep(1)
+                    time.sleep(5)
                 except (
                             selenium.common.exceptions.NoSuchElementException or selenium.common.exceptions.WebDriverException):
                     print("*****************************************************")
@@ -211,9 +249,9 @@ class InstaSpider(scrapy.Spider):
         try:
             other_hash_tags.remove(self.tag)
         except (ValueError or IndexError):
-            print("*****************************************************")
-            self.logger.error("Error In Hash Tag")
-            print("*****************************************************")
+            print("***********************************************************************************************")
+            self.logger.error("Error In Removing Hash Tag or There is no Hast Tag [{}] in captions".format(self.tag))
+            print("************************************************************************************************")
 
             pass
 
@@ -277,13 +315,17 @@ class InstaSpider(scrapy.Spider):
         end_date = end_date_group.group()
         end_epoch = (time.mktime(time.strptime(end_date, '%d/%m/%Y'))) - time.timezone
 
-        if end_epoch <= start_epoch:
-            print("*************************************************")
-            print("ERROR, Please end date must be  ahead of start date")
+        if end_epoch < start_epoch:
+            print("********************************************************************************")
+            print("ERROR, Please end date must be either equal to start date or  ahead of start date")
             print ("Enter Start Date Again ")
-            print("*************************************************")
+            print("*********************************************************************************")
 
             self.input_date_checker()
+
+        if end_epoch == start_epoch:
+            ## add 24 hour
+            end_epoch = start_epoch + 86400
 
         return start_epoch, end_epoch
 
