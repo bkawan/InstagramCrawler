@@ -14,5 +14,5 @@ Exports: Unique identifier for influencer, link to the post, influencer handle, 
 Export file format: json
 
 
-**P.S. Crawling is sometimes illegal. Please check the official TOS. 
+**P.S. Crawling is sometimes illegal. Please check the official Terms Of Service. :-)
 
